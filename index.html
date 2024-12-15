@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aufräum-Checkliste</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #121212;
+            color: #ffffff;
+        }
+        .category {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #333;
+            background-color: #1e1e1e;
+        }
+        .category h2 {
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .category.collapsed .tasks {
+            display: none;
+        }
+        .task {
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        .completed {
+            text-decoration: line-through;
+            color: gray;
+        }
+        .stats {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #333;
+            background-color: #1e1e1e;
+            display: none; /* standardmäßig versteckt */
+        }
+        .progress-bar {
+            margin-top: 20px;
+            width: 100%;
+            background-color: #333;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 20px;
+            background-color: #76c7c0;
+            width: 0;
+            transition: width 0.3s ease;
+        }
+        button {
+            background-color: #76c7c0;
+            border: none;
+            padding: 10px 20px;
+            color: #121212;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #5baaa3;
+        }
+        .reset-button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: red;
+            color: #ffffff;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .task-details {
+            margin-left: 20px;
+        }
+        .stats-category {
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        #languageSwitcher {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+        }
+        #languageSwitcher span {
+            margin-right: 8px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Aufräum-Checkliste</h1>
+<div id="languageSwitcher">
+    <span>Language:</span>
+    <select id="languageSelect">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+    </select>
+</div>
+<button id="startButton">Start</button>
+<div id="checklist"></div>
+<button id="showStats">Statistik</button>
+<button id="exportPDF">Exportieren als PDF</button>
+<div id="stats" class="stats"></div>
+<div class="progress-bar">
+    <div class="progress-bar-inner" id="progressBar"></div>
+</div>
+<button id="resetButton" class="reset-button">Zurücksetzen</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script>
+    const { jsPDF } = window.jspdf;
+
+    const translations = {
+        de: {
+            "Start": "Start",
+            "Statistik": "Statistik",
+            "Exportieren als PDF": "Exportieren als PDF",
+            "Zurücksetzen": "Zurücksetzen",
+            "Aufräum-Checkliste": "Aufräum-Checkliste",
+            "Küche": "Küche",
+            "Wohnzimmer": "Wohnzimmer",
+            "Müll sammeln": "Müll sammeln",
+            "Geschirr wegräumen": "Geschirr wegräumen",
+            "Arbeitsflächen reinigen": "Arbeitsflächen reinigen",
+            "Boden reinigen": "Boden reinigen",
+            "Müll entfernen": "Müll entfernen",
+            "Couchtisch aufräumen": "Couchtisch aufräumen",
+            "Sofa ordnen": "Sofa ordnen",
+            "Staub wischen": "Staub wischen",
+            "Start:": "Start:",
+            "Ende:": "Ende:",
+            "Dauer:": "Dauer:",
+            "Tage": "Tage",
+            "Stunden": "Stunden",
+            "Minuten": "Minuten",
+            "Sekunden": "Sekunden",
+            "Dateiname": "Aufräum-Checkliste",
+        },
+        en: {
+            "Start": "Start",
+            "Statistik": "Statistics",
+            "Exportieren als PDF": "Export as PDF",
+            "Zurücksetzen": "Reset",
+            "Aufräum-Checkliste": "Cleaning Checklist",
+            "Küche": "Kitchen",
+            "Wohnzimmer": "Living Room",
+            "Müll sammeln": "Collect Trash",
+            "Geschirr wegräumen": "Put Away Dishes",
+            "Arbeitsflächen reinigen": "Clean Surfaces",
+            "Boden reinigen": "Clean Floor",
+            "Müll entfernen": "Remove Trash",
+            "Couchtisch aufräumen": "Tidy Coffee Table",
+            "Sofa ordnen": "Arrange Sofa",
+            "Staub wischen": "Dusting",
+            "Start:": "Start:",
+            "Ende:": "End:",
+            "Dauer:": "Duration:",
+            "Tage": "Days",
+            "Stunden": "Hours",
+            "Minuten": "Minutes",
+            "Sekunden": "Seconds",
+            "Dateiname": "Cleaning Checklist",
+        }
+    };
+
+    let currentLanguage = localStorage.getItem('language') || "de";
+
+    const tasks = JSON.parse(localStorage.getItem('tasks')) || {
+        Küche: [
+            { name: "Müll sammeln", completed: false, startTime: null, endTime: null },
+            { name: "Geschirr wegräumen", completed: false, startTime: null, endTime: null },
+            { name: "Arbeitsflächen reinigen", completed: false, startTime: null, endTime: null },
+            { name: "Boden reinigen", completed: false, startTime: null, endTime: null }
+        ],
+        Wohnzimmer: [
+            { name: "Müll entfernen", completed: false, startTime: null, endTime: null },
+            { name: "Couchtisch aufräumen", completed: false, startTime: null, endTime: null },
+            { name: "Sofa ordnen", completed: false, startTime: null, endTime: null },
+            { name: "Staub wischen", completed: false, startTime: null, endTime: null },
+            { name: "Boden reinigen", completed: false, startTime: null, endTime: null }
+        ]
+    };
+
+    let checklistStarted = JSON.parse(localStorage.getItem("checklistStarted")) || false;
+    let checklistStartTime = localStorage.getItem("checklistStartTime") ? new Date(localStorage.getItem("checklistStartTime")) : null;
+    let currentStartTime = null; // Der Startzeitpunkt für Aufgaben
+    let lastEndTime = null; // Der Endzeitpunkt der letzten abgeschlossenen Aufgabe
+
+    function saveProgress() {
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+        localStorage.setItem('checklistStarted', checklistStarted);
+        localStorage.setItem('checklistStartTime', checklistStartTime);
+    }
+
+    function resetChecklist() {
+        if (confirm("Zurücksetzen? | Reset?")) {
+            localStorage.clear();
+            location.reload(); // Setzt die gesamte Seite zurück
+        }
+    }
+
+    function translateText() {
+        document.querySelectorAll("h1, button, label, .category h2, .task label").forEach(el => {
+            const key = el.getAttribute("data-key") || el.textContent.trim();
+            if (translations[currentLanguage][key]) {
+                el.setAttribute("data-key", key);
+                el.textContent = translations[currentLanguage][key];
+            }
+        });
+    }
+
+    document.getElementById("languageSelect").value = currentLanguage;
+
+    document.getElementById("languageSelect").addEventListener("change", (e) => {
+        currentLanguage = e.target.value;
+        localStorage.setItem('language', currentLanguage);
+        translateText();
+        renderChecklist(); // Neu rendern nach Sprachwechsel
+        renderStats(); // Neu rendern der Statistiken
+    });
+
+    document.getElementById("languageSelect").addEventListener("change", () => {
+    translateText();
+    renderChecklist();
+    renderStats();
+    translateEditor(); // Übersetze auch das Bearbeitungsmenü
+});
+
+    document.getElementById("startButton").addEventListener("click", () => {
+        if (!checklistStarted) {
+            checklistStarted = true;
+            checklistStartTime = new Date();
+            currentStartTime = checklistStartTime;  // Setzt die Startzeit beim Start
+            saveProgress();
+            alert(`Checkliste gestartet! | Checklist started!`);
+            document.getElementById("startButton").disabled = true;
+            localStorage.setItem("checklistStarted", true); // Speichert den Status im LocalStorage
+        }
+    });
+
+    // Beim Laden der Seite den Status des Startknopfs anhand von localStorage prüfen
+    if (checklistStarted) {
+        document.getElementById("startButton").disabled = true;
+    }
+
+    function calculateDuration(start, end) {
+        const diff = end - start;
+        const seconds = Math.floor((diff / 1000) % 60);
+        const minutes = Math.floor((diff / (1000 * 60)) % 60);
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+        let duration = '';
+        if (days > 0) duration += `${days} ${translations[currentLanguage]["Tage"]}, `;
+        if (hours > 0) duration += `${hours} ${translations[currentLanguage]["Stunden"]}, `;
+        if (minutes > 0) duration += `${minutes} ${translations[currentLanguage]["Minuten"]}, `;
+        if (seconds > 0) duration += `${seconds} ${translations[currentLanguage]["Sekunden"]}`;
+
+        return duration.trim() || "N/A"; // Wenn die Dauer leer ist, gib "N/A" zurück
+    }
+
+    function updateProgressBar() {
+        const totalTasks = Object.values(tasks).flat().length;
+        const completedTasks = Object.values(tasks).flat().filter(task => task.completed).length;
+        const progressPercentage = (completedTasks / totalTasks) * 100;
+        document.getElementById("progressBar").style.width = `${progressPercentage}%`;
+    }
+
+    function renderChecklist() {
+        const checklist = document.getElementById("checklist");
+        checklist.innerHTML = "";
+
+        Object.entries(tasks).forEach(([category, taskList]) => {
+            const categoryDiv = document.createElement("div");
+            categoryDiv.classList.add("category");
+
+            const categoryHeader = document.createElement("h2");
+            const translatedCategory = translations[currentLanguage][category] || category;
+            categoryHeader.textContent = translatedCategory;
+            categoryHeader.addEventListener("click", () => {
+                categoryDiv.classList.toggle("collapsed");
+            });
+            categoryDiv.appendChild(categoryHeader);
+
+            const tasksContainer = document.createElement("div");
+            tasksContainer.classList.add("tasks");
+
+            taskList.forEach(task => {
+                const taskDiv = document.createElement("div");
+                taskDiv.classList.add("task");
+                if (task.completed) taskDiv.classList.add("completed");
+
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.checked = task.completed;
+
+                const label = document.createElement("label");
+                const translatedTask = translations[currentLanguage][task.name] || task.name;
+                label.textContent = translatedTask;
+
+                // Nur aktivieren, wenn der Startbutton gedrückt wurde
+                checkbox.disabled = !checklistStarted;
+
+                checkbox.addEventListener("change", () => {
+                    if (!lastEndTime) {
+                        task.startTime = currentStartTime;
+                    } else {
+                        task.startTime = lastEndTime; // Die Endzeit der letzten abgeschlossenen Task wird als Startzeit für diese Task genutzt
+                    }
+                    task.completed = checkbox.checked;
+                    task.endTime = checkbox.checked ? new Date() : null;
+
+                    // Die Endzeit der aktuellen Task wird als Startzeit für die nächste Task verwendet
+                    if (task.endTime) {
+                        lastEndTime = task.endTime;
+                    }
+
+                    saveProgress();
+                    renderChecklist();
+                    updateProgressBar();
+                });
+
+                label.addEventListener("click", () => {
+                    if (checklistStarted) {
+                        if (!lastEndTime) {
+                            task.startTime = currentStartTime;
+                        } else {
+                            task.startTime = lastEndTime; // Die Endzeit der letzten abgeschlossenen Task wird als Startzeit für diese Task genutzt
+                        }
+                        task.completed = !task.completed;
+                        checkbox.checked = task.completed;
+                        task.endTime = task.completed ? new Date() : null;
+
+                        // Die Endzeit der aktuellen Task wird als Startzeit für die nächste Task verwendet
+                        if (task.endTime) {
+                            lastEndTime = task.endTime;
+                        }
+
+                        saveProgress();
+                        renderChecklist();
+                        updateProgressBar();
+                    }
+                });
+
+                taskDiv.appendChild(checkbox);
+                taskDiv.appendChild(label);
+                tasksContainer.appendChild(taskDiv);
+            });
+
+            categoryDiv.appendChild(tasksContainer);
+            checklist.appendChild(categoryDiv);
+        });
+
+        updateProgressBar();
+        translateText(); // Übersetzungen anwenden
+    }
+
+    document.getElementById("resetButton").addEventListener("click", resetChecklist);
+
+    document.getElementById("showStats").addEventListener("click", () => {
+        const statsDiv = document.getElementById("stats");
+        if (statsDiv.style.display === "none" || statsDiv.style.display === "") {
+            renderStats(); // Render dynamische Statistiken
+            statsDiv.style.display = "block"; // Anzeigen der Statistiken
+        } else {
+            statsDiv.style.display = "none"; // Verstecken der Statistiken
+        }
+    });
+
+    function renderStats() {
+        const statsDiv = document.getElementById("stats");
+        statsDiv.innerHTML = ""; // Vorheriger Statistik-Inhalt leeren
+
+        Object.entries(tasks).forEach(([category, taskList]) => {
+            const categoryTitle = document.createElement("h3");
+            categoryTitle.classList.add("stats-category");
+            categoryTitle.textContent = translations[currentLanguage][category] || category;
+            statsDiv.appendChild(categoryTitle);
+
+            taskList.forEach(task => {
+                const taskName = document.createElement("div");
+                taskName.textContent = translations[currentLanguage][task.name] || task.name;
+                statsDiv.appendChild(taskName);
+
+                const taskDetails = document.createElement("div");
+                taskDetails.classList.add("task-details");
+
+                // Berechnung der Dauer zwischen Start- und Endzeit
+                const duration = task.startTime && task.endTime
+                    ? calculateDuration(new Date(task.startTime), new Date(task.endTime))
+                    : 'N/A';
+
+                let startTimeText = task.startTime ? new Date(task.startTime).toLocaleTimeString("de-DE") : "N/A";
+                let endTimeText = task.endTime ? new Date(task.endTime).toLocaleTimeString("de-DE") : "N/A";
+
+                // Wenn mehr als 1 Tag zwischen Start und Ende liegt, wird auch das Datum hinzugefügt
+                if (task.startTime && task.endTime && (new Date(task.endTime) - new Date(task.startTime) > 86400000)) {
+                    startTimeText = new Date(task.startTime).toLocaleString("de-DE");
+                    endTimeText = new Date(task.endTime).toLocaleString("de-DE");
+                }
+
+                taskDetails.textContent = `${translations[currentLanguage]["Start:"]} ${startTimeText} | ${translations[currentLanguage]["Ende:"]} ${endTimeText} | ${translations[currentLanguage]["Dauer:"]} ${duration}`;
+                statsDiv.appendChild(taskDetails);
+            });
+        });
+    }
+
+    // Exportieren als PDF
+    document.getElementById("exportPDF").addEventListener("click", () => {
+  try {
+    const doc = new jsPDF();
+    let yPosition = 10; // Y-Position für die PDF-Inhalte
+
+    // Dynamische Überschrift basierend auf Sprache
+    const title = translations[currentLanguage]["Dateiname"];
+    doc.setFontSize(18);
+    doc.text(title, 105, yPosition, null, null, "center"); // Zentrierte Überschrift
+    yPosition += 10;
+
+    // Start-, Ende- und Dauerdetails unter der Überschrift
+    const checklistStart = checklistStartTime
+        ? checklistStartTime.toLocaleString(currentLanguage === "de" ? "de-DE" : "en-US")
+        : "N/A";
+    const checklistEnd = lastEndTime
+        ? lastEndTime.toLocaleString(currentLanguage === "de" ? "de-DE" : "en-US")
+        : "N/A";
+    const checklistDuration = checklistStartTime && lastEndTime
+        ? calculateDuration(checklistStartTime, lastEndTime)
+        : "N/A";
+
+    doc.setFontSize(12);
+    doc.text(`${translations[currentLanguage]["Start:"]} ${checklistStart}`, 10, yPosition);
+    yPosition += 7;
+    doc.text(`${translations[currentLanguage]["Ende:"]} ${checklistEnd}`, 10, yPosition);
+    yPosition += 7;
+    doc.text(`${translations[currentLanguage]["Dauer:"]} ${checklistDuration}`, 10, yPosition);
+    yPosition += 15;
+
+    // Iteration durch Kategorien und Aufgaben
+    Object.entries(tasks).forEach(([category, taskList]) => {
+      doc.setFillColor(200, 200, 200);
+      doc.rect(10, yPosition, 190, 8, "F"); // Grau für Kategorie-Kasten
+      doc.setFontSize(14);
+      const translatedCategory = translations[currentLanguage][category] || category;
+      doc.text(translatedCategory, 15, yPosition + 6); // Text in der Kategorie
+      yPosition += 12;
+
+      taskList.forEach((task) => {
+        const taskText = translations[currentLanguage][task.name] || task.name;
+        const taskStart = task.startTime
+            ? new Date(task.startTime).toLocaleTimeString(currentLanguage === "de" ? "de-DE" : "en-US")
+            : "N/A";
+        const taskEnd = task.endTime
+            ? new Date(task.endTime).toLocaleTimeString(currentLanguage === "de" ? "de-DE" : "en-US")
+            : "N/A";
+        const taskDuration = task.startTime && task.endTime
+            ? calculateDuration(new Date(task.startTime), new Date(task.endTime))
+            : "N/A";
+
+        doc.setFontSize(12);
+        doc.text(taskText, 15, yPosition);
+        doc.text(`${translations[currentLanguage]["Start:"]} ${taskStart} | ${translations[currentLanguage]["Ende:"]} ${taskEnd} | ${translations[currentLanguage]["Dauer:"]} ${taskDuration}`, 80, yPosition);
+        yPosition += 10;
+
+        if (yPosition > 280) {
+          doc.addPage();
+          yPosition = 10;
+        }
+      });
+
+      yPosition += 5; // Abstand nach jeder Kategorie
+    });
+
+    // Speichern der PDF mit dynamischem Dateinamen
+    const now = new Date();
+    const filename = `${translations[currentLanguage]["Dateiname"]}_${now.toLocaleDateString(currentLanguage === "de" ? "de-DE" : "en-US").replaceAll("/", "-")}_${now.toLocaleTimeString(currentLanguage === "de" ? "de-DE" : "en-US", { hour12: currentLanguage === "en" }).replaceAll(":", "-")}.pdf`;
+
+    doc.save(filename);
+  } catch (error) {
+    console.error("PDF Export failed:", error);
+    alert("Es gab ein Problem beim Exportieren der PDF. Bitte überprüfe die Konsole.");
+  }
+});
+
+// Dateiname generieren
+const filename = `${translations[currentLanguage]["Dateiname"]} ${formattedDate} ${formattedTime}.pdf`;
+
+// Debugging-Hinweis: Überprüfe den generierten Dateinamen
+console.log("Generated filename:", filename);
+
+// PDF Export Funktion
+document.getElementById("exportPDF").addEventListener("click", () => {
+  try {
+    const doc = new jsPDF();
+    doc.text("PDF-Inhalt hier einfügen", 10, 10); // Beispielinhalt
+
+    // Speichern mit dem generierten Dateinamen
+    doc.save(filename);
+  } catch (error) {
+    console.error("PDF Export failed:", error);
+    alert("Es gab ein Problem beim Exportieren der PDF. Bitte überprüfe die Konsole.");
+  }
+});
+
+    // PDF speichern
+    doc.save(fileName);
+
+
+
+    renderChecklist();
+    translateText();
+</script>
+<!-- Modal für Einstellungen -->
+<div id="settingsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); z-index: 1000; overflow-y: auto;">
+    <div style="max-width: 600px; margin: 50px auto; background-color: #1e1e1e; padding: 20px; border-radius: 10px; color: white;">
+        <h2>Einstellungen</h2>
+        <button id="closeSettings" style="float: right; background-color: red; color: white; border: none; padding: 10px; border-radius: 5px;">Schließen</button>
+        <div id="categoryEditor"></div>
+    </div>
+</div>
+
+
+<button id="settingsButton" 
+    style="position: fixed; bottom: 20px; right: 20px; 
+           background-color: #FFFF00; /* Gelber Hintergrund */ 
+           border: none; 
+           width: 60px; /* Breite des Buttons anpassen */
+           height: 60px; /* Höhe des Buttons anpassen */
+           border-radius: 50%; 
+           cursor: pointer; 
+           z-index: 1000; 
+           font-size: 40px; /* Größe des Zahnrad-Emojis bleibt groß */ 
+           display: flex; 
+           align-items: center; 
+           justify-content: center; 
+           color: #000000; /* Schwarzes Zahnrad */">
+    ⚙️
+</button>
+
+
+
+<script>
+    // Modal-Logik
+    const settingsModal = document.getElementById("settingsModal");
+const settingsButton = document.getElementById("settingsButton");
+const closeSettings = document.getElementById("closeSettings");
+
+settingsButton.addEventListener("click", () => {
+    renderCategoryEditor(); // Aktualisiere den Editor
+    translateEditor(); // Übersetze das Menü direkt beim Öffnen
+    settingsModal.style.display = "block";
+});
+
+closeSettings.addEventListener("click", () => {
+    settingsModal.style.display = "none";
+});
+
+// Schließen des Bearbeitungs-Menüs, wenn außerhalb geklickt wird
+document.addEventListener("click", (event) => {
+    const settingsModal = document.getElementById("settingsModal");
+    const settingsButton = document.getElementById("settingsButton"); // Button für das Öffnen des Menüs
+
+    if (settingsModal.style.display === "block") {
+        const modalContent = settingsModal.querySelector("div");
+
+        // Verhindere das Schließen, wenn:
+        // 1. Der Klick innerhalb des Modal-Inhalts erfolgt.
+        // 2. Der Klick auf den Einstellungs-Button erfolgt.
+        // 3. Der Klick auf interaktive Elemente wie Input-Felder oder Buttons im Modal erfolgt.
+        if (
+            modalContent.contains(event.target) || 
+            event.target === settingsButton || 
+            event.target.closest("input") || 
+            event.target.closest("button")
+        ) {
+            return; // Schließen verhindern
+        }
+
+        settingsModal.style.display = "none"; // Schließt das Menü
+    }
+});
+
+    function renderCategoryEditor() {
+        const editorContainer = document.getElementById("categoryEditor");
+        editorContainer.innerHTML = ""; // Reset des Containers
+
+        const title = document.createElement("h3");
+        title.textContent = "Kategorie- und Task-Editor";
+        title.style.marginBottom = "20px";
+        editorContainer.appendChild(title);
+
+        // Render existing categories and tasks
+        Object.entries(tasks).forEach(([category, taskList]) => {
+            const categoryDiv = document.createElement("div");
+            categoryDiv.classList.add("category");
+            categoryDiv.style.marginBottom = "20px";
+
+            const categoryHeader = document.createElement("div");
+            categoryHeader.style.display = "flex";
+            categoryHeader.style.justifyContent = "space-between";
+            categoryHeader.style.alignItems = "center";
+            categoryHeader.style.backgroundColor = "#333";
+            categoryHeader.style.padding = "10px";
+            categoryHeader.style.borderRadius = "5px";
+
+            const categoryInput = document.createElement("input");
+            categoryInput.type = "text";
+            categoryInput.value = category;
+            categoryInput.style.flex = "1";
+            categoryInput.style.marginRight = "10px";
+            categoryInput.style.padding = "5px";
+            categoryInput.style.borderRadius = "5px";
+            categoryInput.style.border = "1px solid #555";
+            categoryInput.style.backgroundColor = "#1e1e1e";
+            categoryInput.style.color = "#fff";
+
+            const deleteCategoryButton = document.createElement("button");
+            deleteCategoryButton.textContent = "Löschen";
+            deleteCategoryButton.style.backgroundColor = "red";
+            deleteCategoryButton.style.color = "white";
+            deleteCategoryButton.addEventListener("click", () => {
+                if (confirm(`Kategorie "${category}" wirklich löschen? | Delete "${category}"?`)) {
+                    delete tasks[category];
+                    saveProgress();
+                    renderCategoryEditor();
+                    renderChecklist();
+                }
+            });
+
+            categoryHeader.appendChild(categoryInput);
+            categoryHeader.appendChild(deleteCategoryButton);
+            categoryDiv.appendChild(categoryHeader);
+
+            const tasksContainer = document.createElement("div");
+            tasksContainer.classList.add("tasks");
+            tasksContainer.style.marginTop = "10px";
+            tasksContainer.style.backgroundColor = "#252525";
+            tasksContainer.style.padding = "10px";
+            tasksContainer.style.borderRadius = "5px";
+
+            taskList.forEach((task, index) => {
+    const taskDiv = document.createElement("div");
+    taskDiv.style.display = "flex";
+    taskDiv.style.alignItems = "center";
+    taskDiv.style.marginBottom = "10px";
+
+    // Übersetze den Task-Namen, falls eine Übersetzung vorhanden ist
+    const taskText = document.createElement("span");
+    const translatedTaskName = translations[currentLanguage][task.name] || task.name;
+    taskText.textContent = translatedTaskName;
+    taskText.style.flex = "1";
+    taskText.style.marginRight = "10px";
+    taskText.style.color = "#fff";
+
+    const deleteTaskButton = document.createElement("button");
+    deleteTaskButton.textContent = translations[currentLanguage]["Löschen"] || "Delete";
+    deleteTaskButton.style.backgroundColor = "red";
+    deleteTaskButton.style.color = "white";
+    deleteTaskButton.addEventListener("click", () => {
+        taskList.splice(index, 1); // Task aus der Liste entfernen
+        saveProgress(); // Änderungen speichern
+        renderCategoryEditor(); // Editor neu rendern
+        renderChecklist(); // Hauptliste neu rendern
+    });
+
+    taskDiv.appendChild(taskText); // Übersetzter Text hinzufügen
+    taskDiv.appendChild(deleteTaskButton); // Löschbutton hinzufügen
+    tasksContainer.appendChild(taskDiv); // Task-Div dem Container hinzufügen
+});
+
+
+            const addTaskDiv = document.createElement("div");
+            addTaskDiv.style.display = "flex";
+            addTaskDiv.style.marginTop = "10px";
+
+            const newTaskInput = document.createElement("input");
+            newTaskInput.type = "text";
+            newTaskInput.placeholder = "Neue Aufgabe hinzufügen...";
+            newTaskInput.style.flex = "1";
+            newTaskInput.style.marginRight = "10px";
+            newTaskInput.style.padding = "5px";
+            newTaskInput.style.borderRadius = "5px";
+            newTaskInput.style.border = "1px solid #555";
+            newTaskInput.style.backgroundColor = "#1e1e1e";
+            newTaskInput.style.color = "#fff";
+
+            const addTaskButton = document.createElement("button");
+            addTaskButton.textContent = "Hinzufügen";
+            addTaskButton.addEventListener("click", () => {
+                if (newTaskInput.value.trim()) {
+                    taskList.push({ name: newTaskInput.value.trim(), completed: false });
+                    newTaskInput.value = "";
+                    saveProgress();
+                    renderCategoryEditor();
+                    renderChecklist();
+                }
+            });
+
+            addTaskDiv.appendChild(newTaskInput);
+            addTaskDiv.appendChild(addTaskButton);
+            tasksContainer.appendChild(addTaskDiv);
+
+            categoryDiv.appendChild(tasksContainer);
+            editorContainer.appendChild(categoryDiv);
+
+            // Update category name on blur or Enter key
+categoryInput.addEventListener("blur", () => {
+    const newCategoryName = categoryInput.value.trim();
+
+    if (newCategoryName && newCategoryName !== category) {
+        tasks[newCategoryName] = tasks[category];
+        delete tasks[category];
+        saveProgress();
+        renderCategoryEditor();
+        renderChecklist();
+    }
+});
+
+categoryInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+        categoryInput.blur(); // Simuliere ein Verlassen des Eingabefelds, um den `blur`-Event auszulösen
+    }
+});
+
+        });
+
+        // Add new category
+        const addCategoryDiv = document.createElement("div");
+        addCategoryDiv.style.marginTop = "20px";
+
+        const newCategoryInput = document.createElement("input");
+        newCategoryInput.type = "text";
+        newCategoryInput.placeholder = "Neue Kategorie hinzufügen...";
+        newCategoryInput.style.marginRight = "10px";
+        newCategoryInput.style.padding = "5px";
+        newCategoryInput.style.borderRadius = "5px";
+        newCategoryInput.style.border = "1px solid #555";
+        newCategoryInput.style.backgroundColor = "#1e1e1e";
+        newCategoryInput.style.color = "#fff";
+
+        const addCategoryButton = document.createElement("button");
+        addCategoryButton.textContent = "Hinzufügen";
+        addCategoryButton.addEventListener("click", () => {
+            const newCategoryName = newCategoryInput.value.trim();
+            if (newCategoryName) {
+                tasks[newCategoryName] = [];
+                newCategoryInput.value = "";
+                saveProgress();
+                renderCategoryEditor();
+                renderChecklist();
+            }
+        });
+
+        addCategoryDiv.appendChild(newCategoryInput);
+        addCategoryDiv.appendChild(addCategoryButton);
+        editorContainer.appendChild(addCategoryDiv);
+    }
+    function translateEditor() {
+    const editorContainer = document.getElementById("categoryEditor");
+
+    // Übersetze den Titel des Bearbeitungsmenüs
+    const modalTitle = document.querySelector("#settingsModal h2");
+    if (modalTitle) {
+        modalTitle.textContent = currentLanguage === "de" ? "Einstellungen" : "Settings";
+    }
+
+    // Übersetze den Schließen-Button
+    const closeButton = document.getElementById("closeSettings");
+    if (closeButton) {
+        closeButton.textContent = currentLanguage === "de" ? "Schließen" : "Close";
+    }
+
+    // Übersetze den Titel des Editors
+    const editorTitle = editorContainer.querySelector("h3");
+    if (editorTitle) {
+        editorTitle.textContent = currentLanguage === "de" ? "Kategorie- und Task-Editor" : "Category and Task Editor";
+    }
+
+    // Übersetze vorhandene Kategorien und Tasks
+    editorContainer.querySelectorAll(".category").forEach((categoryDiv) => {
+        const categoryInput = categoryDiv.querySelector("input[type='text']");
+        const categoryName = Object.keys(translations[currentLanguage]).find(
+            (key) => translations[currentLanguage][key] === categoryInput.value.trim()
+        ) || categoryInput.value.trim();
+        categoryInput.value = translations[currentLanguage][categoryName] || categoryName;
+
+        const taskInputs = categoryDiv.querySelectorAll(".tasks input[type='text']");
+        taskInputs.forEach((taskInput) => {
+            const taskName = Object.keys(translations[currentLanguage]).find(
+                (key) => translations[currentLanguage][key] === taskInput.value.trim()
+            ) || taskInput.value.trim();
+            taskInput.value = translations[currentLanguage][taskName] || taskName;
+        });
+    });
+
+    // Übersetze die Platzhalter für neue Kategorien und Aufgaben
+    const newCategoryInput = editorContainer.querySelector("input[placeholder='Neue Kategorie hinzufügen...']");
+    if (newCategoryInput) {
+        newCategoryInput.placeholder =
+            currentLanguage === "de" ? "Neue Kategorie hinzufügen..." : "Add new category...";
+    }
+
+    const newTaskInputs = editorContainer.querySelectorAll("input[placeholder='Neue Aufgabe hinzufügen...']");
+    newTaskInputs.forEach((newTaskInput) => {
+        newTaskInput.placeholder =
+            currentLanguage === "de" ? "Neue Aufgabe hinzufügen..." : "Add new task...";
+    });
+
+    // Übersetze Buttons
+    editorContainer.querySelectorAll("button").forEach((button) => {
+        if (button.textContent.trim() === "Löschen" || button.textContent.trim() === "Delete") {
+            button.textContent = currentLanguage === "de" ? "Löschen" : "Delete";
+        } else if (button.textContent.trim() === "Hinzufügen" || button.textContent.trim() === "Add") {
+            button.textContent = currentLanguage === "de" ? "Hinzufügen" : "Add";
+        }
+    });
+}
+  // Funktion zur Sicherstellung, dass die Sprache beibehalten wird
+  function getCurrentLanguage() {
+        return localStorage.getItem('language') || 'de'; // Standard auf Deutsch
+    }
+
+    function saveLanguage(language) {
+        localStorage.setItem('language', language);
+    }
+
+    // Erweiterung der bestehenden Logik
+    document.getElementById("languageSelect").addEventListener("change", (e) => {
+        const selectedLanguage = e.target.value;
+        saveLanguage(selectedLanguage); // Speichere die ausgewählte Sprache
+        currentLanguage = selectedLanguage;
+        translateEditor(); // Übersetze den Editor
+    });
+
+    // Aktualisierung der renderCategoryEditor-Funktion
+    const originalRenderCategoryEditor = renderCategoryEditor;
+    renderCategoryEditor = function () {
+        const currentLanguage = getCurrentLanguage(); // Sprache holen
+        originalRenderCategoryEditor(); // Originalfunktion aufrufen
+
+        // Übersetzungen sicherstellen
+        const title = document.querySelector("#categoryEditor h3");
+        if (title) {
+            title.textContent =
+                currentLanguage === "de" ? "Kategorie- und Task-Editor" : "Category and Task Editor";
+        }
+
+        document.querySelectorAll(".category button, .tasks button").forEach((button) => {
+            if (button.textContent.trim() === "Löschen" || button.textContent.trim() === "Delete") {
+                button.textContent = currentLanguage === "de" ? "Löschen" : "Delete";
+            } else if (button.textContent.trim() === "Hinzufügen" || button.textContent.trim() === "Add") {
+                button.textContent = currentLanguage === "de" ? "Hinzufügen" : "Add";
+            }
+        });
+
+        document.querySelectorAll("input[placeholder]").forEach((input) => {
+            if (input.placeholder === "Neue Kategorie hinzufügen..." || input.placeholder === "Add new category...") {
+                input.placeholder =
+                    currentLanguage === "de" ? "Neue Kategorie hinzufügen..." : "Add new category...";
+            } else if (input.placeholder === "Neue Aufgabe hinzufügen..." || input.placeholder === "Add new task...") {
+                input.placeholder =
+                    currentLanguage === "de" ? "Neue Aufgabe hinzufügen..." : "Add new task...";
+            }
+        });
+    };
+
+    // Sicherstellen, dass die Sprache beim Start korrekt ist
+    document.addEventListener("DOMContentLoaded", () => {
+        renderChecklist(); // Kategorien und Tasks anzeigen
+        const savedLanguage = getCurrentLanguage();
+        document.getElementById("languageSelect").value = savedLanguage;
+        translateEditor(); // Menü in der gespeicherten Sprache übersetzen
+    });
+
+    // Aktualisierung der translateEditor-Funktion
+    const originalTranslateEditor = translateEditor;
+    translateEditor = function () {
+        const currentLanguage = getCurrentLanguage(); // Sprache holen
+        originalTranslateEditor(); // Originalfunktion aufrufen
+
+        // Zusätzliche Übersetzungen für Modaltitel
+        const modalTitle = document.querySelector("#settingsModal h2");
+        if (modalTitle) {
+            modalTitle.textContent = currentLanguage === "de" ? "Einstellungen" : "Settings";
+        }
+
+        const closeButton = document.getElementById("closeSettings");
+        if (closeButton) {
+            closeButton.textContent = currentLanguage === "de" ? "Schließen" : "Close";
+        }
+    };
+    
+</script>
+
+</body>
+</html>
